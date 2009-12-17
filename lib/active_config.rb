@@ -77,19 +77,20 @@ class ActiveConfig
   #
   #
   #FIXME TODO
-  def initialize opts={}
-    opts = Hash[:path,opts] if opts.is_a?(String) or opts.is_a?(Array)
-    if opts.is_a?(Array) 
-      opts=Hash[:path,opts.join(':')]
-    end 
-    @config_path=opts[:path] ||
-      ENV['ACTIVE_CONFIG_PATH'] ||
-      (defined?(RAILS_ROOT) ? File.join(RAILS_ROOT,'etc') : nil)
-    @config_file=opts[:file]
-    @root_file=opts[:root_file] || 'global' 
-    # @root_file=opts[:root_file] || 
-    #  (_valid_file?('global') ? 'global' : nil)
+  def initialize(opts={})
+    opts = Hash[:path, opts] if opts.is_a?(Array) || opts.is_a?(String)
 
+    # :path/:file have higher priority then ENV variables
+    if opts.include?(:path) || opts.include?(:file) then
+      @config_path = opts[:path]
+      @config_file = opts[:file]
+    else
+      # infer :path through ENV, no ENV variable for :file
+      @config_path=ENV['ACTIVE_CONFIG_PATH'] ||
+        (defined?(RAILS_ROOT) ? File.join(RAILS_ROOT,'etc') : nil)
+    end
+
+    # alexg: Damn, this is ugly
     if ActiveConfig::Suffixes===opts[:suffixes]
       @suffixes_obj = opts[:suffixes] 
     end
@@ -114,15 +115,26 @@ class ActiveConfig
     dups = dups_h.to_a.select{|k,v|v.size>=2}
     raise ActiveConfig::DuplicateConfig.new(dups.map{|e|"Duplicate file #{e.first} found in \n#{e.last.map{|el|"\t"+el}.join("\n")}"}.join("\n")) if dups.size>0
 
-#    _check_config!
+    # root_file only possible with :path.
+    #
+    # IMPORTANT: This check needs to be after we have suffixes.
+    # _valid_file? barfs if suffixes are offset
+    if @config_path then
+      @root_file=opts[:root_file] || 
+        (_valid_file?('global') ? 'global' : nil)
+    end
+
+    _check_config!
   end
 
   def _check_config!
     _config_path.each do |path|
-      raise Error.new "#{path} not valid config path" unless File.dir? path
+      unless File.directory? path
+        raise Error.new "#{path} not valid config path" 
+      end
     end
-    if _config_file && File.exists?(_config_file) then
-      raise Error.new "#{_config_file} not valid config path"
+    if _config_file && !File.exists?(_config_file) then
+      raise Error.new "#{_config_file} not valid config file"
     end
     if _root_file
       raise "#{_root_file} root file not available"  unless
@@ -139,10 +151,12 @@ class ActiveConfig
   end
 
   def _config_path
+    return [] unless @config_path
     @config_path_ary ||=
       begin
-        path = @config_path.is_a?(Enumerable) ? @config_path :
-          @config_path.split(File::PATH_SEPARATOR).reject{ | x | x.empty? }
+        path = @config_path.is_a?(String) ?
+          @config_path.split(File::PATH_SEPARATOR).reject{ | x | x.empty? } :
+          @config_path
         path.map!{|x| x.freeze }.freeze
       end
   end
@@ -268,13 +282,28 @@ class ActiveConfig
   end
 
   ## 
-  # Returns a list of all relavant config files as specified
-  # by the suffixes object.
-  def _config_files(name) 
+  # Returns a list of all relavant config files as specified by the
+  # suffixes object.  Expected to behave appropreately, when passed
+  # _config_file (which would include the path).  In case name already
+  # has .yml extension, suffix will be inserted between stem and extension.
+  #
+  # _config_files will do a reasonable thing if name is either
+  # _config_file (from :file), with a full or relative path, or name
+  # to be found in the _config_path (from :path).  Initialization code
+  # ensures only one is provided.  If that code is removed, :file
+  # behavior will be simular to :root_file. (TODO:  maybe merge 2 together)
+
+  def _config_files(name, ext='.yml') 
     return [name.to_s] if File.exists?(name.to_s) && !File.directory?(name.to_s)
-    _suffixes.for(name.to_s).inject([]) do | files,name_x |
-      _config_path.reverse.inject(files) do |files, dir |
-        fn = File.join(dir, name_x.to_s + '.yml')
+
+    basename = File.basename(name.to_s, ext) || nil
+    dirname  = File.dirname(name.to_s)
+    path_ary = _config_path.empty? ? [dirname] : _config_path
+
+    _suffixes.for(basename, ext).inject([]) do |files, name_x|
+      # for :path style configs
+      path_ary.reverse.inject(files) do |files, dir|
+        fn = File.join(dir, name_x)
         files << fn if File.exists? fn
         files
       end
@@ -424,9 +453,9 @@ class ActiveConfig
     elsif _root_file
       value = with_file(_root_file, method, *args)
       value
-    # elsif _config_file
-    #   value = with_file(_config_file, method, *args)
-    #   value
+    elsif _config_file
+      value = with_file(_config_file, method, *args)
+      value
     else 
       super
     end
