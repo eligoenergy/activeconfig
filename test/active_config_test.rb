@@ -28,7 +28,6 @@ require 'test/unit'
 require 'fileutils' # FileUtils.touch
 require 'benchmark'
 
-AC=ActiveConfig.new
 class ActiveConfig::Test < Test::Unit::TestCase
   def active_config
     @active_config||= ActiveConfig.new :suffixes  =>[
@@ -201,6 +200,14 @@ class ActiveConfig::Test < Test::Unit::TestCase
     assert_kind_of Hash, active_config.get_config_file(:test)
   end
 
+  def test_root
+    # test verify direct access
+    v = 101
+    assert_equal v, active_config.global.using_array_index
+    assert_equal v, active_config[:using_array_index]
+    assert_equal v, active_config['using_array_index']
+    assert_equal v, active_config.using_array_index
+  end
 
   def test_config_files
     return
