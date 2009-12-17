@@ -47,14 +47,10 @@ class ActiveConfig::Test < Test::Unit::TestCase
   end
   def setup
     super
-    begin
-      active_config._verbose = nil # default
-      active_config.reload(true)
-      active_config._reload_disabled = nil # default
-      active_config._reload_delay = nil # default
-    rescue => err
-      # NOTHING
-    end
+    active_config._verbose = nil # default
+    active_config.reload(true)
+    active_config._reload_disabled = nil # default
+    active_config._reload_delay = nil # default
   end
 
 

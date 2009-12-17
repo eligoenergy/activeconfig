@@ -61,8 +61,8 @@ class ActiveConfig
       end
       super
     end
-    def for file
-      suffixes.map { |this_suffix| [file,*this_suffix].compact.join('_')}.compact.uniq
+    def for file, ext=''
+      suffixes.map { |this_suffix| [file,*this_suffix].compact.join('_') + ext}.compact.uniq
     end
     def suffixes ary=@priority
       ary.map{|e|
