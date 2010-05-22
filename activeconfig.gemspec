@@ -50,6 +50,7 @@ Gem::Specification.new do |s|
     "test/active_config_test_multi.rb",
     "test/env_test.rb"
   ]
+  s.add_dependency(%q<activesupport>)
 
   if s.respond_to? :specification_version then
     current_version = Gem::Specification::CURRENT_SPECIFICATION_VERSION
