@@ -88,6 +88,7 @@ class ActiveConfig
     else
       # infer :path through ENV, no ENV variable for :file
       @config_path=ENV['ACTIVE_CONFIG_PATH'] ||
+        ((defined?(Rails) && Rails.respond_to?(:root)) ? File.join(Rails.root,'etc') : nil) ||
         (defined?(RAILS_ROOT) ? File.join(RAILS_ROOT,'etc') : nil)
     end
 
