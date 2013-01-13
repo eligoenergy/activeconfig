@@ -30,22 +30,24 @@ require 'benchmark'
 
 
 
-
 class ActiveConfig::TestMulti < Test::Unit::TestCase
-  def active_config
-    @active_config||=ActiveConfig.new
-  end
+  attr_accessor :active_config
+
   def setup
     super
-    begin
-      active_config._flush_cache
-      active_config._verbose = nil # default
-      active_config.reload(true)
-      active_config._reload_disabled = nil # default
-      active_config._reload_delay = nil # default
-    rescue => err
-      # NOTHING
-    end
+
+    dir = File.expand_path(File.dirname(__FILE__))
+    test_dir  = File.join(dir, 'active_config_test_multi')
+
+    @active_config = ActiveConfig.new :path => Dir[test_dir +'/*']
+
+    active_config._flush_cache
+    active_config._verbose = nil # default
+    active_config.reload(true)
+    active_config._reload_disabled = nil # default
+    active_config._reload_delay = nil # default
+  rescue => err
+    # NOTHING
   end
 
 

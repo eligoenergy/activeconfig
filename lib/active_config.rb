@@ -58,34 +58,40 @@ require 'erb'
 #
 
 class ActiveConfig
-  class ActiveConfig::DuplicateConfig < Exception; end
+  class DuplicateConfig < Exception; end
+  class Error < Exception; end
+end
+
+class ActiveConfig
   EMPTY_ARRAY = [ ].freeze unless defined? EMPTY_ARRAY
   def _suffixes
     @suffixes_obj
   end
   # ActiveConfig.new take options from a hash (or hash like) object.
   # Valid keys are:
-  #   :path           :  Where it can find the config files, defaults to ENV['ACTIVE_CONFIG_PATH'], or RAILS_ROOT/etc
-  #   :root_file      :  Defines the file that holds "top level" configs. (ie active_config.key).  Defaults to "global"
+  #   :path           :  Where it can find the config files, defaults to ENV['ACTIVE_CONFIG_PATH'], or RAILS_ROOT/etc.  :path is either 
+  #   :file           :  Single file mode.  Only look for configuration in that one, presenting that file at top level
+  #   :root_file      :  Defines the file that holds "top level" configs. (ie active_config.key).  Defaults to "global" if global exists, nil otherwise.
   #   :suffixes       :  Either a suffixes object, or an array of suffixes symbols with their priority.  See the ActiveConfig::Suffixes object
   #   :config_refresh :  How often we should check for update config files
   #
-  #                 
+  #
   #FIXME TODO
   def initialize opts={}
     opts = Hash[:path,opts] if opts.is_a?(String) or opts.is_a?(Array)
     if opts.is_a?(Array) 
       opts=Hash[:path,opts.join(':')]
     end 
-    @config_path=opts[:path] || ENV['ACTIVE_CONFIG_PATH'] || (defined?(RAILS_ROOT) ? File.join(RAILS_ROOT,'etc') : nil)
-    @opts=opts
-    if opts[:one_file]
-      @root_file=@config_path 
-    else
+    @config_path=opts[:path] ||
+      ENV['ACTIVE_CONFIG_PATH'] ||
+      (defined?(RAILS_ROOT) ? File.join(RAILS_ROOT,'etc') : nil)
+    @config_file=opts[:file]
     @root_file=opts[:root_file] || 'global' 
-      if ActiveConfig::Suffixes===opts[:suffixes]
-        @suffixes_obj = opts[:suffixes] 
-      end
+    # @root_file=opts[:root_file] || 
+    #  (_valid_file?('global') ? 'global' : nil)
+
+    if ActiveConfig::Suffixes===opts[:suffixes]
+      @suffixes_obj = opts[:suffixes] 
     end
     @suffixes_obj ||= Suffixes.new self, opts[:suffixes]
     @suffixes_obj.ac_instance=self
@@ -107,14 +113,46 @@ class ActiveConfig
     }
     dups = dups_h.to_a.select{|k,v|v.size>=2}
     raise ActiveConfig::DuplicateConfig.new(dups.map{|e|"Duplicate file #{e.first} found in \n#{e.last.map{|el|"\t"+el}.join("\n")}"}.join("\n")) if dups.size>0
+
+#    _check_config!
   end
+
+  def _check_config!
+    _config_path.each do |path|
+      raise Error.new "#{path} not valid config path" unless File.dir? path
+    end
+    if _config_file && File.exists?(_config_file) then
+      raise Error.new "#{_config_file} not valid config path"
+    end
+    if _root_file
+      raise "#{_root_file} root file not available"  unless
+        _valid_file?(_root_file)
+      raise "#{_root_file} root file not valid without :path" if
+        _config_path.empty?
+    end
+    if !_config_path.empty? && _config_file then
+      raise Error.new "Both :path and :file are configured.  Pick one"
+    end
+    if _config_path.empty? && !_config_file then
+      raise Error.new "Neither :path nor :file are configured.  Pick one"
+    end
+  end
+
   def _config_path
     @config_path_ary ||=
       begin
-        path_sep = (@config_path =~ /;/) ? /;/ : /:/ # Make Wesha happy
-        path = @config_path.split(path_sep).reject{ | x | x.empty? }
-        path.map!{|x| File.expand_path(x).freeze }.freeze
+        path = @config_path.is_a?(Enumerable) ? @config_path :
+          @config_path.split(File::PATH_SEPARATOR).reject{ | x | x.empty? }
+        path.map!{|x| x.freeze }.freeze
       end
+  end
+
+  def _root_file
+    @root_file
+  end
+
+  def _config_file
+    @config_file
   end
 
   # DON'T CALL THIS IN production.
@@ -161,7 +199,6 @@ class ActiveConfig
   #   active_config.config_files => <<Array of config files to be parsed>>
   #
   def _load_config_files(name, force=false)
-    name = name.to_s
     now = Time.now
 
     # Get array of all the existing files file the config name.
@@ -224,14 +261,22 @@ class ActiveConfig
     end
   end
 
+  # is name valid name to pass to with_file method
+  def _valid_file?(name)
+    @cache_valid ||= {}
+    @cache_valid[name.to_sym] ||= !_config_files(name).empty?
+  end
+
   ## 
   # Returns a list of all relavant config files as specified
   # by the suffixes object.
   def _config_files(name) 
-    return [name] if File.exists?(name) and not File.directory?(name)
-    _suffixes.for(name).inject([]) do | files,name_x |
+    return [name.to_s] if File.exists?(name.to_s) && !File.directory?(name.to_s)
+    _suffixes.for(name.to_s).inject([]) do | files,name_x |
       _config_path.reverse.inject(files) do |files, dir |
-        files <<  File.join(dir, name_x.to_s + '.yml')
+        fn = File.join(dir, name_x.to_s + '.yml')
+        files << fn if File.exists? fn
+        files
       end
     end
   end
@@ -282,7 +327,7 @@ class ActiveConfig
   def _fire_on_load(name)
     callbacks = 
       (@on_load['ANY'] || EMPTY_ARRAY) + 
-      (@on_load[name] || EMPTY_ARRAY)
+      (@on_load[name.to_s] || EMPTY_ARRAY)
     callbacks.uniq!
     STDERR.puts "_fire_on_load(#{name.inspect}): callbacks = #{callbacks.inspect}" if @verbose && ! callbacks.empty?
     callbacks.each do | cb |
@@ -323,7 +368,7 @@ class ActiveConfig
     }
     # STDERR.puts "with_file(#{name.inspect}, #{args.inspect}) => #{result.inspect}"; result
   end
- 
+
   #If you are using this in production code, you fail.
   def reload(force = false)
     if force || ! @reload_disabled
@@ -356,8 +401,8 @@ class ActiveConfig
   ##
   # Gets a value from the global config file
   #
-  def [](key, file=@root_file)
-    get_config_file(file)[key]
+  def [](key, file=_root_file)
+    with_file(file, key)
   end
 
   ##
@@ -369,18 +414,21 @@ class ActiveConfig
   #   ActiveConfig.global.foo   => ActiveConfig.with_file(:global).foo
   #
   def method_missing(method, *args)
-    return self[method.to_sym] if @opts[:one_file] 
+    ## return self[method.to_sym] if @opts[:one_file] 
     if method.to_s=~/^_(.*)/
       _flush_cache 
       return @suffixes.send($1, *args)
-    else 
-      if @root_file && rf=get_config_file(@root_file)      
-        if rf.has_key?(method.to_sym) || rf.has_key?(method.to_s)
-          return with_file(@root_file).send(method,*args)
-        end
-      end
+    elsif _valid_file?(method)
       value = with_file(method, *args)
       value
+    elsif _root_file
+      value = with_file(_root_file, method, *args)
+      value
+    # elsif _config_file
+    #   value = with_file(_config_file, method, *args)
+    #   value
+    else 
+      super
     end
   end
 end
