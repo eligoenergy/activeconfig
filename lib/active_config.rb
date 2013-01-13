@@ -85,8 +85,10 @@ class ActiveConfig
       @config_path = opts[:path]
       @config_file = opts[:file]
     else
-      # infer :path through ENV, no ENV variable for :file
+      # default or infer :path through ENV or Rails obejct.
+      # no ENV variable for :file
       @config_path=ENV['ACTIVE_CONFIG_PATH'] ||
+        (defined?(Rails) ? Rails.root+'etc' : nil) ||
         (defined?(RAILS_ROOT) ? File.join(RAILS_ROOT,'etc') : nil)
     end
 
@@ -154,9 +156,16 @@ class ActiveConfig
     return [] unless @config_path
     @config_path_ary ||=
       begin
-        path = @config_path.is_a?(String) ?
-          @config_path.split(File::PATH_SEPARATOR).reject{ | x | x.empty? } :
-          @config_path
+        path = 
+          case @config_path
+          when String then
+            @config_path.split(File::PATH_SEPARATOR).reject{ | x | x.empty? }
+          when Array then
+            @config_path
+          else
+            # alexg: Rails.env returns Pathname
+            [@config_path]
+          end
         path.map!{|x| x.freeze }.freeze
       end
   end
