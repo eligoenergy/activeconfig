@@ -4,6 +4,7 @@ require 'active_config/hash_weave' # Hash#weave
 require 'rubygems'
 require 'active_config/hash_config'
 require 'active_config/suffixes'
+require 'aws/s3'
 require 'erb'
 
 ##
@@ -60,6 +61,7 @@ require 'erb'
 class ActiveConfig
   class DuplicateConfig < Exception; end
   class Error < Exception; end
+  class S3ConfigObject < AWS::S3::S3Object; end
 end
 
 class ActiveConfig
@@ -71,6 +73,11 @@ class ActiveConfig
   # Valid keys are:
   #   :path           :  Where it can find the config files, defaults to ENV['ACTIVE_CONFIG_PATH'], or RAILS_ROOT/etc.  :path is either 
   #   :file           :  Single file mode.  Only look for configuration in that one, presenting that file at top level
+  #   :s3 = {
+  #     :bucket
+  #     :aws_access_key_id
+  #     :aws_secret_access_key
+  #   }
   #   :root_file      :  Defines the file that holds "top level" configs. (ie active_config.key).  Defaults to "global" if global exists, nil otherwise.
   #   :suffixes       :  Either a suffixes object, or an array of suffixes symbols with their priority.  See the ActiveConfig::Suffixes object
   #   :config_refresh :  How often we should check for update config files
@@ -80,10 +87,11 @@ class ActiveConfig
   def initialize(opts={})
     opts = Hash[:path, opts] if opts.is_a?(Array) || opts.is_a?(String)
 
-    # :path/:file have higher priority then ENV variables
-    if opts.include?(:path) || opts.include?(:file) then
+    # :path/:file/:s3 have higher priority then ENV variables
+    if opts.include?(:path) || opts.include?(:file) || opts.include?(:s3) then
       @config_path = opts[:path]
       @config_file = opts[:file]
+      @config_s3 = opts[:s3]
     else
       # default or infer :path through ENV or Rails obejct.
       # no ENV variable for :file
@@ -127,6 +135,11 @@ class ActiveConfig
     end
 
     _check_config!
+
+    if _config_s3
+      AWS::S3::Base.establish_connection!(access_key_id: _config_s3[:aws_access_key_id], secret_access_key: _config_s3[:aws_secret_access_key])
+      S3ConfigObject.set_current_bucket_to(_config_s3[:bucket])
+    end
   end
 
   def _check_config!
@@ -138,17 +151,21 @@ class ActiveConfig
     if _config_file && !File.exists?(_config_file) then
       raise Error.new "#{_config_file} not valid config file"
     end
+    if _config_s3 && (!_config_s3[:bucket] || !_config_s3[:aws_access_key_id] || !_config_s3[:aws_secret_access_key])
+      raise Error.new "Must configure s3 :bucket, :aws_access_key_id and :aws_secret_access_key"
+    end
     if _root_file
       raise "#{_root_file} root file not available"  unless
         _valid_file?(_root_file)
       raise "#{_root_file} root file not valid without :path" if
         _config_path.empty?
     end
-    if !_config_path.empty? && _config_file then
-      raise Error.new "Both :path and :file are configured.  Pick one"
-    end
-    if _config_path.empty? && !_config_file then
-      raise Error.new "Neither :path nor :file are configured.  Pick one"
+
+    configured = [!_config_path.empty?, !!_config_file, !!_config_s3].select { |c| c }
+    if configured.length > 1
+      raise Error.new "Pick one of :path, :file or :s3"
+    elsif configured.length == 0
+      raise Error.new "Neither :path nor :file nor :s3 are configured.  Pick one"
     end
   end
 
@@ -176,6 +193,10 @@ class ActiveConfig
 
   def _config_file
     @config_file
+  end
+
+  def _config_s3
+    @config_s3
   end
 
   # DON'T CALL THIS IN production.
@@ -234,12 +255,20 @@ class ActiveConfig
       filename=f
       val=nil
       mod_time=nil
-      next unless File.exists?(filename)
-      next(@file_cache[filename]) unless (mod_time=File.stat(filename).mtime) != @file_times[filename]
+
       begin
-      File.open( filename ) { | yf |
-        val = yf.read
-      }
+      if _config_s3
+        next unless S3ConfigObject.exists?(filename)
+        config_object = S3ConfigObject.find(filename)
+        next(@file_cache[filename]) unless (mod_time=config_object.metadata[:mtime]) != @file_times[filename]
+        val = S3ConfigObject.value(filename)
+      else
+        next unless File.exists?(filename)
+        next(@file_cache[filename]) unless (mod_time=File.stat(filename).mtime) != @file_times[filename]
+        File.open( filename ) { | yf |
+          val = yf.read
+        }
+      end
       # If file has a # ACTIVE_CONFIG:ERB comment,
       # Process it as an ERb first.
       if /^\s*#\s*ACTIVE_CONFIG\s*:\s*ERB/i.match(val)
@@ -307,13 +336,23 @@ class ActiveConfig
 
     basename = File.basename(name.to_s, ext) || nil
     dirname  = File.dirname(name.to_s)
-    path_ary = _config_path.empty? ? [dirname] : _config_path
+    path_ary = if _config_s3
+      ['']  # no dirs on s3, just one place where objects are stored
+    elsif _config_path.empty?
+      [dirname]
+    else
+      _config_path
+    end
 
     _suffixes.for(basename, ext).inject([]) do |files, name_x|
       # for :path style configs
       path_ary.reverse.inject(files) do |files, dir|
-        fn = File.join(dir, name_x)
-        files << fn if File.exists? fn
+        if _config_s3
+          files << name_x if S3ConfigObject.exists?(name_x)
+        else
+          fn = File.join(dir, name_x)
+          files << fn if File.exists? fn
+        end
         files
       end
     end
