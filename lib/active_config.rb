@@ -4,7 +4,6 @@ require 'active_config/hash_weave' # Hash#weave
 require 'rubygems'
 require 'active_config/hash_config'
 require 'active_config/suffixes'
-require 'aws/s3'
 require 'erb'
 
 ##
@@ -61,7 +60,6 @@ require 'erb'
 class ActiveConfig
   class DuplicateConfig < Exception; end
   class Error < Exception; end
-  class S3ConfigObject < AWS::S3::S3Object; end
 end
 
 class ActiveConfig
@@ -137,8 +135,12 @@ class ActiveConfig
     _check_config!
 
     if _config_s3
-      AWS::S3::Base.establish_connection!(access_key_id: _config_s3[:aws_access_key_id], secret_access_key: _config_s3[:aws_secret_access_key])
-      S3ConfigObject.set_current_bucket_to(_config_s3[:bucket])
+      connection ||= Fog::Storage.new({
+        :provider                 => 'AWS',
+        :aws_access_key_id        => _config_s3[:aws_access_key_id],
+        :aws_secret_access_key    => _config_s3[:aws_secret_access_key]
+      })
+      @s3_bucket = connection.directories.find{ |x| x.key == _config_s3[:bucket]}
     end
   end
 
@@ -258,10 +260,10 @@ class ActiveConfig
 
       begin
       if _config_s3
-        next unless S3ConfigObject.exists?(filename)
-        config_object = S3ConfigObject.find(filename)
-        next(@file_cache[filename]) unless (mod_time=config_object.metadata[:mtime]) != @file_times[filename]
-        val = S3ConfigObject.value(filename)
+        config_object = @s3_bucket.files.get(filename)
+        next unless config_object
+        next(@file_cache[filename]) unless (mod_time=config_object.last_modified) != @file_times[filename]
+        val = config_object.body
       else
         next unless File.exists?(filename)
         next(@file_cache[filename]) unless (mod_time=File.stat(filename).mtime) != @file_times[filename]
@@ -348,7 +350,7 @@ class ActiveConfig
       # for :path style configs
       path_ary.reverse.inject(files) do |files, dir|
         if _config_s3
-          files << name_x if S3ConfigObject.exists?(name_x)
+          files << name_x if @s3_bucket.files.get(name_x)
         else
           fn = File.join(dir, name_x)
           files << fn if File.exists? fn
