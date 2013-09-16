@@ -309,6 +309,11 @@ class ActiveConfig
     return @cache_hash[name.to_sym] if @cache_hash[name.to_sym] and @reload_disabled
     # $stderr.puts "NOT USING CACHED AND RELOAD DISABLED" if @reload_disabled
     @cache_hash[name.to_sym]=begin
+      if _config_s3 and @s3_bucket.files.select { |f| _suffixes.for(name, ".yml").include?(f.key) }.empty?
+        # we don't know whether this file is on s3, reload the s3 file list
+        # to make sure it didn't appear since we last loaded the file list
+        @s3_bucket.files.reload
+      end
       x = _config_hash(name)
       @hash_times[name.to_sym]=now.to_i
       x
