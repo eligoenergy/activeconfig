@@ -350,7 +350,7 @@ class ActiveConfig
       # for :path style configs
       path_ary.reverse.inject(files) do |files, dir|
         if _config_s3
-          files << name_x if @s3_bucket.files.get(name_x)
+          files << name_x if @s3_bucket.files.select { |f| f.key == name_x }.first
         else
           fn = File.join(dir, name_x)
           files << fn if File.exists? fn
