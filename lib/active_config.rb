@@ -361,13 +361,9 @@ class ActiveConfig
   end
 
   def _config_hash(name)
-    unless result = @cache_hash[name]
-      result = @cache_hash[name] = 
-        HashConfig._make_indifferent_and_freeze(
-          _load_config_files(name).inject({ }) { | n, h | n.weave(h, false) })
-    end
-    #$stderr.puts result.inspect
-    result
+    @cache_hash[name] =
+      HashConfig._make_indifferent_and_freeze(
+        _load_config_files(name).inject({ }) { | n, h | n.weave(h, false) })
   end
 
 
