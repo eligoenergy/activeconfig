@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = "activeconfig"
-  s.version = "0.8.1"
+  s.version = "0.8.2"
 
   s.files         = `git ls-files`.split("\n")
   s.test_files    = `git ls-files -- test/*`.split("\n")
