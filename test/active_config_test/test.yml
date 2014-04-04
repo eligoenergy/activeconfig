@@ -12,3 +12,5 @@ hash_1:
 
 
 array_1: [ a, b, c, d ]
+
+hash_2: {}

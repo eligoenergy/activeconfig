@@ -434,5 +434,10 @@ class ActiveConfig::Test < Test::Unit::TestCase
     STDERR.puts "\n#{n}.times =>#{bm}\n"
   end
 
+  def test_empty_dictionary_hash
+    assert_equal({}, active_config.test.hash_2)
+    assert_equal(nil, active_config.test.hash_2.foo)
+  end
+
 end # class
 
