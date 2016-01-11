@@ -9,3 +9,7 @@ group :development do
   gem "jeweler", "~> 1.8.3"
   gem "guard"
 end
+
+group :test do
+  gem "test-unit"
+end
