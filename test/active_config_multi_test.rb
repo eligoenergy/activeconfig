@@ -13,6 +13,7 @@ dir = File.dirname __FILE__
 $LOAD_PATH.unshift File.join(dir, "..", "lib")
 
 # Configure ActiveConfig to use our test config files.
+self.class.send(:remove_const, :RAILS_ENV) if defined?(RAILS_ENV) # avoid warning
 RAILS_ENV = 'development'
 ENV.delete('ACTIVE_CONFIG_OVERLAY') # Avoid gb magic.
 
@@ -26,9 +27,6 @@ require 'active_config'
 require 'test/unit'
 require 'fileutils' # FileUtils.touch
 require 'benchmark'
-
-
-
 
 class ActiveConfig::TestMulti < Test::Unit::TestCase
   attr_accessor :active_config
@@ -50,13 +48,8 @@ class ActiveConfig::TestMulti < Test::Unit::TestCase
     # NOTHING
   end
 
-
-  def teardown
-    super
-  end
-
   def test_multi
-      assert_equal  "WIN",  active_config.test.default
-  end  
+    assert_equal  "WIN",  active_config.test.default
+  end
 
 end

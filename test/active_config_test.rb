@@ -11,6 +11,7 @@ dir = File.dirname __FILE__
 $LOAD_PATH.unshift File.join(dir, "..", "lib")
 
 # Configure ActiveConfig to use our test config files.
+self.class.send(:remove_const, :RAILS_ENV) if defined?(RAILS_ENV) # avoid warning
 RAILS_ENV = 'development'
 ENV['ACTIVE_CONFIG_PATH'] = File.expand_path(File.dirname(__FILE__) + "/active_config_test/")
 ENV.delete('ACTIVE_CONFIG_OVERLAY') # Avoid gb magic.
@@ -30,20 +31,21 @@ require 'benchmark'
 class ActiveConfig::Test < Test::Unit::TestCase
   def active_config
     @active_config||= ActiveConfig.new :suffixes  =>[
-      nil, 
-      [:overlay, nil], 
-      [:local], 
-      [:overlay, [:local]], 
-      :config, 
-      [:overlay, :config], 
-      :local_config, 
-      [:overlay, :local_config], 
-      :hostname, 
-      [:overlay, :hostname], 
-      [:hostname, :config_local], 
+      nil,
+      [:overlay, nil],
+      [:local],
+      [:overlay, [:local]],
+      :config,
+      [:overlay, :config],
+      :local_config,
+      [:overlay, :local_config],
+      :hostname,
+      [:overlay, :hostname],
+      [:hostname, :config_local],
       [:overlay, [:hostname, :config_local]]
-    ] 
+    ]
   end
+
   def setup
     super
     active_config._verbose = nil # default
@@ -52,17 +54,14 @@ class ActiveConfig::Test < Test::Unit::TestCase
     active_config._reload_delay = nil # default
   end
 
-
-  def teardown
-    super
-  end
-
   def test_global
     assert_equal 101,active_config.using_array_index
   end
+
   def test_gbracket
     assert_equal 101,active_config[:using_array_index]
   end
+
   def test_rails_env
     assert_equal RAILS_ENV, active_config._suffixes.rails_env
   end
@@ -74,11 +73,9 @@ class ActiveConfig::Test < Test::Unit::TestCase
     assert_equal true, active_config.test.secure_login
   end
 
-
   def test_default
     assert_equal "yo!", active_config.test.default
   end
-
 
   def test_indifferent
     assert h = active_config.test
@@ -92,13 +89,11 @@ class ActiveConfig::Test < Test::Unit::TestCase
     assert hsym.object_id == hstr.object_id
   end
 
-
   def test_dot_notation
     assert h = active_config.test
     assert h = h.hash_1
     assert h.foo
   end
-
 
   def test_dot_notation_overrun
     assert_raise NoMethodError do
@@ -106,12 +101,10 @@ class ActiveConfig::Test < Test::Unit::TestCase
     end
   end
 
-
   def test_array_notation
     assert h = active_config.test[:hash_1]
     assert a = active_config.test[:array_1]
   end
-
 
   def test_function_notation
     assert h = active_config.test(:hash_1, 'foo')
@@ -119,7 +112,6 @@ class ActiveConfig::Test < Test::Unit::TestCase
     assert_equal 'c', active_config.test(:array_1, 2)
     assert_equal nil, active_config.test(:array_1, "2")
   end
-
 
   def test_immutable
     assert active_config.test.frozen?
@@ -130,11 +122,9 @@ class ActiveConfig::Test < Test::Unit::TestCase
     end
   end
 
-
   def test_to_yaml
     assert active_config.test.to_yaml
   end
-
 
   def test_disable_reload
     @active_config=nil
@@ -149,10 +139,10 @@ class ActiveConfig::Test < Test::Unit::TestCase
     # Get the name of a config file to touch.
     assert cf1 = active_config._config_files("test")
     assert cf1 = cf1[0]
-      
+
     v = nil
     th = nil
-    active_config.disable_reload do 
+    active_config.disable_reload do
       # Make sure first access works inside disable reload.
       assert th = active_config.test
       assert_equal "foo", v = active_config.test.hash_1.foo
@@ -160,7 +150,7 @@ class ActiveConfig::Test < Test::Unit::TestCase
       # Get access again and insure that file was not reloaded.
       assert_equal v, active_config.test.hash_1.foo
       assert th.object_id == active_config.test.object_id
-  
+
 #       STDERR.puts "touching #{cf1.inspect}"
       FileUtils.touch(cf1)
 
@@ -175,13 +165,11 @@ class ActiveConfig::Test < Test::Unit::TestCase
 
     #assert active_config._config_file_loaded
     assert_equal v, active_config.test.hash_1.foo
-     
 
     # Restore reload_delay
     active_config._reload_delay = false
     active_config._verbose = false
   end
-
 
   def test_hash_merge
     assert_equal "foo", active_config.test.hash_1.foo
@@ -190,11 +178,9 @@ class ActiveConfig::Test < Test::Unit::TestCase
     assert_equal "zzz", active_config.test.hash_1.zzz
   end
 
-
   def test_array
     assert_equal [ 'a', 'b', 'c', 'd' ], active_config.test.array_1
   end
-
 
   def test_index
     assert_kind_of Hash, active_config.get_config_file(:test)
@@ -240,7 +226,6 @@ class ActiveConfig::Test < Test::Unit::TestCase
     end
 
   end
-
 
   def test_config_changed
     return
@@ -298,22 +283,19 @@ class ActiveConfig::Test < Test::Unit::TestCase
     assert cf3.object_id == cf4.object_id
     assert active_config._load_config_files("test")
     assert_equal false, active_config.config_changed?("test")
- 
   end
-
 
   def test_check_reload_disabled
     active_config.reload(true)
 
     assert_kind_of Array, active_config._config_files('test')
-    
+
     active_config._reload_disabled = true
 
     assert_kind_of Array, active_config._config_files('test')
 
     active_config._reload_disabled = nil
   end
-
 
   def test_on_load_callback
     # STDERR.puts "test_on_load_callback"
@@ -337,8 +319,7 @@ class ActiveConfig::Test < Test::Unit::TestCase
     assert_equal 1, called_back
 
     assert_equal "foo", active_config.test.hash_1.foo
-    
-    
+
     # STDERR.puts "Not expecting config change."
     assert_nil active_config._check_config_changed
     assert_equal "foo", active_config.test.hash_1.foo
@@ -347,7 +328,7 @@ class ActiveConfig::Test < Test::Unit::TestCase
     old_test_oid=active_config.test.object_id
     file = cf1[0]
     # STDERR.puts "Touching file #{file.inspect}"
-    active_config._flush_cache 
+    active_config._flush_cache
     File.chmod(0644, file)
     FileUtils.touch(file)
     File.chmod(0444, file)
@@ -365,7 +346,6 @@ class ActiveConfig::Test < Test::Unit::TestCase
     # STDERR.puts "test_on_load_callback: END"
   end
 
-
   def test_overlay_by_name
     assert_equal nil,   active_config._suffixes.overlay
 
@@ -379,44 +359,42 @@ class ActiveConfig::Test < Test::Unit::TestCase
     assert_equal "GB",  active_config.test_GB.hash_1.gb
   end
 
-
   def test_overlay_change
     begin
       active_config._suffixes.overlay = 'gb'
-      
+
       assert_equal "foo", active_config.test.hash_1.foo
       assert_equal "foo", active_config.test_GB.hash_1.foo
       assert_equal "foo", active_config.test_US.hash_1.foo
-      
+
       assert_equal "GB",  active_config.test.hash_1.bok
       assert_equal "GB",  active_config.test_GB.hash_1.bok
       assert_equal "US",  active_config.test_US.hash_1.bok
-      
+
       assert_equal "GB",  active_config.test.hash_1.gb
       assert_equal "GB",  active_config.test_GB.hash_1.gb
       assert_equal nil,   active_config.test_US.hash_1.gb
-      
+
       active_config._suffixes.overlay = 'us'
-      
+
       assert_equal "foo", active_config.test.hash_1.foo
       assert_equal "foo", active_config.test_GB.hash_1.foo
       assert_equal "foo", active_config.test_US.hash_1.foo
-      
+
       assert_equal "US", active_config.test.hash_1.bok
       assert_equal "GB", active_config.test_GB.hash_1.bok
       assert_equal "US", active_config.test_US.hash_1.bok
-      
+
       assert_equal  nil,  active_config.test.hash_1.gb
       assert_equal "GB",  active_config.test_GB.hash_1.gb
       assert_equal  nil,  active_config.test_US.hash_1.gb
- 
+
       active_config._suffixes.overlay = nil
 
     ensure
       active_config._suffixes.overlay = nil
     end
   end
-
 
   # Expand this benchmark to
   # compare with relative minimum performance, for example
@@ -426,8 +404,8 @@ class ActiveConfig::Test < Test::Unit::TestCase
   # -- kurt@cashnetusa.com 2007/06/12
   def test_zzz_benchmark
     n = 10000
-    bm = Benchmark.measure do 
-      n.times do 
+    bm = Benchmark.measure do
+      n.times do
         active_config.test.hash_1.foo
       end
     end
@@ -440,4 +418,3 @@ class ActiveConfig::Test < Test::Unit::TestCase
   end
 
 end # class
-

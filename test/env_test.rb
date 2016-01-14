@@ -8,7 +8,8 @@ $:.unshift File.expand_path("../../lib",__FILE__)
 # Test target dependencies
 
 # Configure ActiveConfig to use our test config files.
-ENV['RAILS_ENV']='development'
+self.class.send(:remove_const, :RAILS_ENV) if defined?(RAILS_ENV) # avoid warning
+ENV['RAILS_ENV'] = 'development'
 
 ENV['ACTIVE_CONFIG_PATH'] = File.expand_path(File.dirname(__FILE__) + "/active_config_test/")
 
@@ -26,26 +27,26 @@ require 'benchmark'
 AC=ActiveConfig.new
 AC.test.secure_login
 ENV['RAILS_ENV']='production'
-RAILS_ENV = ENV['RAILS_ENV'] 
+RAILS_ENV = ENV['RAILS_ENV']
 
-
-class ActiveConfig::Test < Test::Unit::TestCase
+class ActiveConfig::EnvTest < Test::Unit::TestCase
   def active_config
     @active_config||= ActiveConfig.new :suffixes  =>[
-      nil, 
-      [:overlay, nil], 
-      [:local], 
-      [:overlay, [:local]], 
-      :config, 
-      [:overlay, :config], 
-      :local_config, 
-      [:overlay, :local_config], 
-      :hostname, 
-      [:overlay, :hostname], 
-      [:hostname, :config_local], 
+      nil,
+      [:overlay, nil],
+      [:local],
+      [:overlay, [:local]],
+      :config,
+      [:overlay, :config],
+      :local_config,
+      [:overlay, :local_config],
+      :hostname,
+      [:overlay, :hostname],
+      [:hostname, :config_local],
       [:overlay, [:hostname, :config_local]]
-    ] 
+    ]
   end
+
   def setup
     super
     begin
@@ -58,18 +59,10 @@ class ActiveConfig::Test < Test::Unit::TestCase
     end
   end
 
-
-  def teardown
-    super
-  end
-
-
   def test_cache_clearing
     assert_equal true, AC.test.secure_login
     AC._suffixes.rails_env=proc { |sym_table|return (RAILS_ENV if defined?(RAILS_ENV))||ENV['RAILS_ENV']}
     assert_equal false, AC.test.secure_login
   end
 
-
 end # class
-

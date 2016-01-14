@@ -89,38 +89,41 @@ class ActiveConfig
     if opts.include?(:path) || opts.include?(:file) || opts.include?(:s3) then
       @config_path = opts[:path]
       @config_file = opts[:file]
-      @config_s3 = opts[:s3]
+      @config_s3   = opts[:s3]
     else
       # default or infer :path through ENV or Rails obejct.
       # no ENV variable for :file
-      @config_path=ENV['ACTIVE_CONFIG_PATH'] ||
-        (defined?(Rails) ? Rails.root+'etc' : nil) ||
-        (defined?(RAILS_ROOT) ? File.join(RAILS_ROOT,'etc') : nil)
+      @config_path = ENV['ACTIVE_CONFIG_PATH'] ||
+        (defined?(Rails) ? (Rails.root + 'etc') : nil) ||
+        (defined?(RAILS_ROOT) ? File.join(RAILS_ROOT, 'etc') : nil)
     end
 
     # alexg: Damn, this is ugly
-    if ActiveConfig::Suffixes===opts[:suffixes]
+    if ActiveConfig::Suffixes === opts[:suffixes]
       @suffixes_obj = opts[:suffixes] 
     end
-    @suffixes_obj ||= Suffixes.new self, opts[:suffixes]
-    @suffixes_obj.ac_instance=self
-    @config_refresh = 
-      (opts.has_key?(:config_refresh) ? opts[:config_refresh].to_i : 300)
+
+    @suffixes_obj ||= Suffixes.new(self, opts[:suffixes])
+    @suffixes_obj.ac_instance = self
+    @config_refresh = (opts.has_key?(:config_refresh) ? opts[:config_refresh].to_i : 300)
     @on_load = { }
+
     self._flush_cache
-    dups_h=Hash.new{|h,e|h[e]=[]}
+
+    dups_h = Hash.new{ |h,e| h[e] = [] }
+
     self._config_path.map{|e|
-      if File.exists?(e) and File.directory?(e)
+      if File.exist?(e) and File.directory?(e)
         Dir[e + '/*'].map{|f|
-          if File.file?(f)
-            dups_h[File.basename(f)] << f
-          end
+          dups_h[File.basename(f)] << f if File.file?(f)
         }
       else
         STDERR.puts "WARNING:  Active Config Path NOT FOUND #{e}" unless opts[:quiet]
       end
     }
-    dups = dups_h.to_a.select{|k,v|v.size>=2}
+
+    dups = dups_h.to_a.select{|k,v| v.size >= 2}
+
     raise ActiveConfig::DuplicateConfig.new(dups.map{|e|"Duplicate file #{e.first} found in \n#{e.last.map{|el|"\t"+el}.join("\n")}"}.join("\n")) if dups.size>0
 
     # root_file only possible with :path.
@@ -150,12 +153,15 @@ class ActiveConfig
         raise Error.new "#{path} not valid config path" 
       end
     end
-    if _config_file && !File.exists?(_config_file) then
+
+    if _config_file && !File.exist?(_config_file) then
       raise Error.new "#{_config_file} not valid config file"
     end
+
     if _config_s3 && (!_config_s3[:bucket] || !_config_s3[:aws_access_key_id] || !_config_s3[:aws_secret_access_key])
       raise Error.new "Must configure s3 :bucket, :aws_access_key_id and :aws_secret_access_key"
     end
+
     if _root_file
       raise "#{_root_file} root file not available"  unless
         _valid_file?(_root_file)
@@ -164,11 +170,13 @@ class ActiveConfig
     end
 
     configured = [!_config_path.empty?, !!_config_file, !!_config_s3].select { |c| c }
+
     if configured.length > 1
       raise Error.new "Pick one of :path, :file or :s3"
     elsif configured.length == 0
       raise Error.new "Neither :path nor :file nor :s3 are configured.  Pick one"
     end
+
   end
 
   def _config_path
@@ -202,12 +210,13 @@ class ActiveConfig
   end
 
   # DON'T CALL THIS IN production.
-  def _flush_cache *types
-    if types.size == 0 or types.include? :hash
+  def _flush_cache(*types)
+    if types.size == 0 or types.include?(:hash)
       @cache_hash = { }
       @hash_times = Hash.new(0)
     end
-    if types.size == 0 or types.include? :file
+
+    if types.size == 0 or types.include?(:file)
       @file_times = Hash.new(0)
       @file_cache = { }
     end
@@ -265,7 +274,7 @@ class ActiveConfig
         next(@file_cache[filename]) unless (mod_time=config_object.last_modified) != @file_times[filename]
         val = config_object.body
       else
-        next unless File.exists?(filename)
+        next unless File.exist?(filename)
         next(@file_cache[filename]) unless (mod_time=File.stat(filename).mtime) != @file_times[filename]
         File.open( filename ) { | yf |
           val = yf.read
@@ -339,7 +348,7 @@ class ActiveConfig
   # behavior will be simular to :root_file. (TODO:  maybe merge 2 together)
 
   def _config_files(name, ext='.yml') 
-    return [name.to_s] if File.exists?(name.to_s) && !File.directory?(name.to_s)
+    return [name.to_s] if File.exist?(name.to_s) && !File.directory?(name.to_s)
 
     basename = File.basename(name.to_s, ext) || nil
     dirname  = File.dirname(name.to_s)
@@ -358,7 +367,7 @@ class ActiveConfig
           files << name_x if @s3_bucket.files.select { |f| f.key == name_x }.first
         else
           fn = File.join(dir, name_x)
-          files << fn if File.exists? fn
+          files << fn if File.exist? fn
         end
         files
       end
