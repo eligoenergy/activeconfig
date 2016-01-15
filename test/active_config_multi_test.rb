@@ -12,11 +12,6 @@ ENV['ACTIVE_CONFIG_PATH']=[File.expand_path("../active_config_test_multi/patha",
 dir = File.dirname __FILE__
 $LOAD_PATH.unshift File.join(dir, "..", "lib")
 
-# Configure ActiveConfig to use our test config files.
-self.class.send(:remove_const, :RAILS_ENV) if defined?(RAILS_ENV) # avoid warning
-RAILS_ENV = 'development'
-ENV.delete('ACTIVE_CONFIG_OVERLAY') # Avoid gb magic.
-
 # Test environment.
 require 'rubygems'
 
@@ -35,21 +30,27 @@ class ActiveConfig::TestMulti < Test::Unit::TestCase
     super
 
     dir = File.expand_path(File.dirname(__FILE__))
-    test_dir  = File.join(dir, 'active_config_test_multi')
+    test_dir = File.join(dir, 'active_config_test_multi')
 
-    @active_config = ActiveConfig.new :path => Dir[test_dir +'/*']
+    @active_config = ActiveConfig.new(:path => Dir[test_dir + '/*'])
+
+    # Configure ActiveConfig to use our test config files.
+    Object.const_set(:RAILS_ENV, 'development')
+    ENV.delete('ACTIVE_CONFIG_OVERLAY') # Avoid gb magic.
 
     active_config._flush_cache
     active_config._verbose = nil # default
     active_config.reload(true)
     active_config._reload_disabled = nil # default
     active_config._reload_delay = nil # default
-  rescue => err
-    # NOTHING
+  end
+
+  def teardown
+    Object.send(:remove_const, :RAILS_ENV)
   end
 
   def test_multi
-    assert_equal  "WIN",  active_config.test.default
+    assert_equal "WIN",  active_config.test.default
   end
 
 end

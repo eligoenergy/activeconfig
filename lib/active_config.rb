@@ -504,7 +504,7 @@ class ActiveConfig
   #
   def method_missing(method, *args)
     ## return self[method.to_sym] if @opts[:one_file] 
-    if method.to_s=~/^_(.*)/
+    if method.to_s =~ /^_(.*)/
       _flush_cache 
       return @suffixes.send($1, *args)
     elsif _valid_file?(method)

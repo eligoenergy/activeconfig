@@ -10,12 +10,6 @@ require 'pp'
 dir = File.dirname __FILE__
 $LOAD_PATH.unshift File.join(dir, "..", "lib")
 
-# Configure ActiveConfig to use our test config files.
-self.class.send(:remove_const, :RAILS_ENV) if defined?(RAILS_ENV) # avoid warning
-RAILS_ENV = 'development'
-ENV['ACTIVE_CONFIG_PATH'] = File.expand_path(File.dirname(__FILE__) + "/active_config_test/")
-ENV.delete('ACTIVE_CONFIG_OVERLAY') # Avoid gb magic.
-
 # Test environment.
 require 'rubygems'
 # gem 'activesupport'
@@ -49,6 +43,11 @@ class ActiveConfig::TestFile < Test::Unit::TestCase
 
   def setup
     super
+
+    ENV.delete('ACTIVE_CONFIG_OVERLAY') # Avoid gb magic.
+    ENV['ACTIVE_CONFIG_PATH'] = File.expand_path(File.dirname(__FILE__) + "/active_config_test/")
+    Object.const_set(:RAILS_ENV, 'development')
+
     dir = File.expand_path(File.dirname(__FILE__))
     test_file  = File.join(dir, 'active_config_test_file', 'test.yml')
 

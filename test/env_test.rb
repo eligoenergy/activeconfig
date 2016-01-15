@@ -8,7 +8,7 @@ $:.unshift File.expand_path("../../lib",__FILE__)
 # Test target dependencies
 
 # Configure ActiveConfig to use our test config files.
-self.class.send(:remove_const, :RAILS_ENV) if defined?(RAILS_ENV) # avoid warning
+Object.send(:remove_const, :RAILS_ENV) if defined?(RAILS_ENV) # avoid warning
 ENV['RAILS_ENV'] = 'development'
 
 ENV['ACTIVE_CONFIG_PATH'] = File.expand_path(File.dirname(__FILE__) + "/active_config_test/")
@@ -24,10 +24,8 @@ require 'test/unit'
 require 'fileutils' # FileUtils.touch
 require 'benchmark'
 
-AC=ActiveConfig.new
+AC = ActiveConfig.new
 AC.test.secure_login
-ENV['RAILS_ENV']='production'
-RAILS_ENV = ENV['RAILS_ENV']
 
 class ActiveConfig::EnvTest < Test::Unit::TestCase
   def active_config
@@ -49,20 +47,24 @@ class ActiveConfig::EnvTest < Test::Unit::TestCase
 
   def setup
     super
-    begin
-      active_config._verbose = nil # default
-      active_config.reload(true)
-      active_config._reload_disabled = nil # default
-      active_config._reload_delay = nil # default
-    rescue => err
-      # NOTHING
-    end
+
+    Object.const_set(:RAILS_ENV, 'production')
+
+    active_config._verbose = nil # default
+    active_config.reload(true)
+    active_config._reload_disabled = nil # default
+    active_config._reload_delay = nil # default
   end
 
   def test_cache_clearing
     assert_equal true, AC.test.secure_login
     AC._suffixes.rails_env=proc { |sym_table|return (RAILS_ENV if defined?(RAILS_ENV))||ENV['RAILS_ENV']}
     assert_equal false, AC.test.secure_login
+  end
+
+  def teardown
+    Object.send(:remove_const, :RAILS_ENV)
+    super
   end
 
 end # class

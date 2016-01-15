@@ -10,12 +10,6 @@ require 'pp'
 dir = File.dirname __FILE__
 $LOAD_PATH.unshift File.join(dir, "..", "lib")
 
-# Configure ActiveConfig to use our test config files.
-self.class.send(:remove_const, :RAILS_ENV) if defined?(RAILS_ENV) # avoid warning
-RAILS_ENV = 'development'
-ENV['ACTIVE_CONFIG_PATH'] = File.expand_path(File.dirname(__FILE__) + "/active_config_test/")
-ENV.delete('ACTIVE_CONFIG_OVERLAY') # Avoid gb magic.
-
 # Test environment.
 require 'rubygems'
 
@@ -29,8 +23,9 @@ require 'fileutils' # FileUtils.touch
 require 'benchmark'
 
 class ActiveConfig::Test < Test::Unit::TestCase
+
   def active_config
-    @active_config||= ActiveConfig.new :suffixes  =>[
+    @active_config ||= ActiveConfig.new :suffixes  =>[
       nil,
       [:overlay, nil],
       [:local],
@@ -47,11 +42,23 @@ class ActiveConfig::Test < Test::Unit::TestCase
   end
 
   def setup
+
     super
+
+    ENV.delete('ACTIVE_CONFIG_OVERLAY') # Avoid gb magic.
+    ENV['ACTIVE_CONFIG_PATH'] = File.expand_path(File.dirname(__FILE__) + "/active_config_test/")
+    Object.const_set(:RAILS_ENV, 'development')
+
     active_config._verbose = nil # default
     active_config.reload(true)
     active_config._reload_disabled = nil # default
     active_config._reload_delay = nil # default
+  end
+
+  def teardown
+    ENV.delete('ACTIVE_CONFIG_PATH')
+    Object.send(:remove_const, :RAILS_ENV)
+    super
   end
 
   def test_global
