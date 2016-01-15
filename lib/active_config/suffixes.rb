@@ -1,7 +1,7 @@
 class ActiveConfig
 
   class HashWithHooks < HashConfig
-    attr_accessor :write_hooks
+    attr_writer :write_hooks
     alias_method :regular_writer_hwh, :regular_writer unless method_defined?(:regular_writer_hwh)
 
     def write_hooks

@@ -109,12 +109,12 @@ class ActiveConfig::Test < Test::Unit::TestCase
   end
 
   def test_array_notation
-    assert h = active_config.test[:hash_1]
-    assert a = active_config.test[:array_1]
+    assert_not_nil active_config.test[:hash_1]
+    assert_equal ["a", "b", "c", "d"], active_config.test[:array_1]
   end
 
   def test_function_notation
-    assert h = active_config.test(:hash_1, 'foo')
+    assert_equal 'foo', active_config.test(:hash_1, 'foo')
     assert_equal nil, active_config.test(:hash_1, 'foo', :too_far)
     assert_equal 'c', active_config.test(:array_1, 2)
     assert_equal nil, active_config.test(:array_1, "2")
@@ -203,10 +203,12 @@ class ActiveConfig::Test < Test::Unit::TestCase
   end
 
   def test_config_files
-    return
+
     #FIXME TODO:  1) Figure out if this functionality needs to be replicated
     #             2) If so, do it.
-    assert_kind_of Array, cf = active_config._load_config_files("test").select{|x| x[3]}
+
+=begin
+    assert_kind_of Array, active_config._load_config_files("test").select{ |x| x[3] }
     # STDERR.puts "cf = #{cf.inspect}"
 
     if ENV['ACTIVE_CONFIG_OVERLAY']
@@ -231,13 +233,14 @@ class ActiveConfig::Test < Test::Unit::TestCase
       assert_equal "test", cf[1][0]
       assert_equal "test_local", cf[1][1]
     end
+=end
 
   end
 
   def test_config_changed
-    return
     active_config.reload(true)
 
+=begin
     cf1 = active_config._config_files("test")
     cf2 = active_config._config_files("test")
     cf3 = active_config._config_files("test")
@@ -290,6 +293,7 @@ class ActiveConfig::Test < Test::Unit::TestCase
     assert cf3.object_id == cf4.object_id
     assert active_config._load_config_files("test")
     assert_equal false, active_config.config_changed?("test")
+=end
   end
 
   def test_check_reload_disabled

@@ -11,7 +11,7 @@ require 'erb'
 #
 #=ActiveConfig
 #
-# * Provides dottable, hash, array, and argument access to YAML 
+# * Provides dottable, hash, array, and argument access to YAML
 #   configuration files
 # * Implements multilevel caching to reduce disk accesses
 # * Overlays multiple configuration files in an intelligent manner
@@ -54,7 +54,7 @@ require 'erb'
 #
 #  ------------------------------------------------------------------
 #  irb> ActiveConfig.test_local
-#  => {"hash_1"=>{"zzz"=>"zzz", "foo"=>"foo", "bar"=>"baz"}, "test_mode"=>true} 
+#  => {"hash_1"=>{"zzz"=>"zzz", "foo"=>"foo", "bar"=>"baz"}, "test_mode"=>true}
 #
 
 class ActiveConfig
@@ -64,12 +64,13 @@ end
 
 class ActiveConfig
   EMPTY_ARRAY = [ ].freeze unless defined? EMPTY_ARRAY
+
   def _suffixes
     @suffixes_obj
   end
   # ActiveConfig.new take options from a hash (or hash like) object.
   # Valid keys are:
-  #   :path           :  Where it can find the config files, defaults to ENV['ACTIVE_CONFIG_PATH'], or RAILS_ROOT/etc.  :path is either 
+  #   :path           :  Where it can find the config files, defaults to ENV['ACTIVE_CONFIG_PATH'], or RAILS_ROOT/etc.  :path is either
   #   :file           :  Single file mode.  Only look for configuration in that one, presenting that file at top level
   #   :s3 = {
   #     :bucket
@@ -83,13 +84,16 @@ class ActiveConfig
   #
   #FIXME TODO
   def initialize(opts={})
+    @verbose = @root_file = @reload_disabled = nil
+
     opts = Hash[:path, opts] if opts.is_a?(Array) || opts.is_a?(String)
+
+    @config_s3   = opts[:s3]
+    @config_file = opts[:file]
 
     # :path/:file/:s3 have higher priority then ENV variables
     if opts.include?(:path) || opts.include?(:file) || opts.include?(:s3) then
       @config_path = opts[:path]
-      @config_file = opts[:file]
-      @config_s3   = opts[:s3]
     else
       # default or infer :path through ENV or Rails obejct.
       # no ENV variable for :file
@@ -100,7 +104,7 @@ class ActiveConfig
 
     # alexg: Damn, this is ugly
     if ActiveConfig::Suffixes === opts[:suffixes]
-      @suffixes_obj = opts[:suffixes] 
+      @suffixes_obj = opts[:suffixes]
     end
 
     @suffixes_obj ||= Suffixes.new(self, opts[:suffixes])
@@ -131,7 +135,7 @@ class ActiveConfig
     # IMPORTANT: This check needs to be after we have suffixes.
     # _valid_file? barfs if suffixes are offset
     if @config_path then
-      @root_file=opts[:root_file] || 
+      @root_file = opts[:root_file] ||
         (_valid_file?('global') ? 'global' : nil)
     end
 
@@ -150,7 +154,7 @@ class ActiveConfig
   def _check_config!
     _config_path.each do |path|
       unless File.directory? path
-        raise Error.new "#{path} not valid config path" 
+        raise Error.new "#{path} not valid config path"
       end
     end
 
@@ -183,7 +187,7 @@ class ActiveConfig
     return [] unless @config_path
     @config_path_ary ||=
       begin
-        path = 
+        path =
           case @config_path
           when String then
             @config_path.split(File::PATH_SEPARATOR).reject{ | x | x.empty? }
@@ -236,9 +240,9 @@ class ActiveConfig
   end
 
   ##
-  # Get each config file's yaml hash for the given config name, 
-  # to be merged later. Files will only be loaded if they have 
-  # not been loaded before or the files have changed within the 
+  # Get each config file's yaml hash for the given config name,
+  # to be merged later. Files will only be loaded if they have
+  # not been loaded before or the files have changed within the
   # last five minutes, or force is explicitly set to true.
   #
   # If file contains the comment:
@@ -254,11 +258,9 @@ class ActiveConfig
   #   active_config.config_files => <<Array of config files to be parsed>>
   #
   def _load_config_files(name, force=false)
-    now = Time.now
-
     # Get array of all the existing files file the config name.
     config_files = _config_files(name)
-    
+
     #$stderr.puts config_files.inspect
     # Get all the data from all yaml files into as hashes
     _fire_on_load(name)
@@ -291,13 +293,14 @@ class ActiveConfig
           :config_name => name,
           :config_files => config_files,
         })
+
         val = ERB.new(val).result(binding)
       end
       # Read file data as YAML.
       val = YAML::load(val)
       # STDERR.puts "ActiveConfig: loaded #{filename.inspect} => #{val.inspect}"
       (@config_file_loaded ||= { })[name] = config_files
-      rescue Exception => e
+      rescue Exception
         raise
       end
       @file_cache[filename]=val
@@ -312,8 +315,8 @@ class ActiveConfig
     # STDERR.puts "get_config_file(#{name.inspect})"
     name = name.to_s # if name.is_a?(Symbol)
     now = Time.now
-    return @cache_hash[name.to_sym] if 
-      (now.to_i - @hash_times[name.to_sym]  < @config_refresh) 
+    return @cache_hash[name.to_sym] if
+      (now.to_i - @hash_times[name.to_sym]  < @config_refresh)
     # return cached if we have something cached and no reload_disabled flag
     return @cache_hash[name.to_sym] if @cache_hash[name.to_sym] and @reload_disabled
     # $stderr.puts "NOT USING CACHED AND RELOAD DISABLED" if @reload_disabled
@@ -335,7 +338,7 @@ class ActiveConfig
     @cache_valid[name.to_sym] ||= !_config_files(name).empty?
   end
 
-  ## 
+  ##
   # Returns a list of all relavant config files as specified by the
   # suffixes object.  Expected to behave appropreately, when passed
   # _config_file (which would include the path).  In case name already
@@ -347,7 +350,7 @@ class ActiveConfig
   # ensures only one is provided.  If that code is removed, :file
   # behavior will be simular to :root_file. (TODO:  maybe merge 2 together)
 
-  def _config_files(name, ext='.yml') 
+  def _config_files(name, ext='.yml')
     return [name.to_s] if File.exist?(name.to_s) && !File.directory?(name.to_s)
 
     basename = File.basename(name.to_s, ext) || nil
@@ -360,9 +363,9 @@ class ActiveConfig
       _config_path
     end
 
-    _suffixes.for(basename, ext).inject([]) do |files, name_x|
+    _suffixes.for(basename, ext).inject([]) do |all_files, name_x|
       # for :path style configs
-      path_ary.reverse.inject(files) do |files, dir|
+      path_ary.reverse.inject(all_files) do |files, dir|
         if _config_s3
           files << name_x if @s3_bucket.files.select { |f| f.key == name_x }.first
         else
@@ -388,10 +391,10 @@ class ActiveConfig
   #
   # Example:
   #
-  #   class MyClass 
+  #   class MyClass
   #     @my_config = { }
-  #     ActiveConfig.on_load(:global) do 
-  #       @my_config = { } 
+  #     ActiveConfig.on_load(:global) do
+  #       @my_config = { }
   #     end
   #     def my_config
   #       @my_config ||= something_expensive_thing_on_config(ACTIVEConfig.global.foobar)
@@ -414,8 +417,8 @@ class ActiveConfig
 
   # Do reload callbacks.
   def _fire_on_load(name)
-    callbacks = 
-      (@on_load['ANY'] || EMPTY_ARRAY) + 
+    callbacks =
+      (@on_load['ANY'] || EMPTY_ARRAY) +
       (@on_load[name.to_s] || EMPTY_ARRAY)
     callbacks.uniq!
     STDERR.puts "_fire_on_load(#{name.inspect}): callbacks = #{callbacks.inspect}" if @verbose && ! callbacks.empty?
@@ -428,7 +431,7 @@ class ActiveConfig
     iname=iname.nil? ?  @cache_hash.keys.dup : [*iname]
     ret=iname.map{ | name |
     # STDERR.puts "ActiveConfig: config changed? #{name.inspect} reload_disabled = #{@reload_disabled}" if @verbose
-    if config_changed?(name) && ! @reload_disabled 
+    if config_changed?(name) && ! @reload_disabled
       STDERR.puts "ActiveConfig: config changed #{name.inspect}" if @verbose
       if @cache_hash[name]
         @cache_hash[name] = nil
@@ -443,8 +446,8 @@ class ActiveConfig
   end
 
   def with_file(name, *args)
-    # STDERR.puts "with_file(#{name.inspect}, #{args.inspect})"; result = 
-    args.inject(get_config_file(name)) { | v, i | 
+    # STDERR.puts "with_file(#{name.inspect}, #{args.inspect})"; result =
+    args.inject(get_config_file(name)) { | v, i |
       # STDERR.puts "v = #{v.inspect}, i = #{i.inspect}"
       case v
       when Hash
@@ -466,9 +469,9 @@ class ActiveConfig
     nil
   end
 
-  ## 
+  ##
   # Disables any reloading of config,
-  # executes &block, 
+  # executes &block,
   # calls check_config_changed,
   # returns result of block
   #
@@ -503,9 +506,9 @@ class ActiveConfig
   #   ActiveConfig.global.foo   => ActiveConfig.with_file(:global).foo
   #
   def method_missing(method, *args)
-    ## return self[method.to_sym] if @opts[:one_file] 
+    ## return self[method.to_sym] if @opts[:one_file]
     if method.to_s =~ /^_(.*)/
-      _flush_cache 
+      _flush_cache
       return @suffixes.send($1, *args)
     elsif _valid_file?(method)
       value = with_file(method, *args)
@@ -516,9 +519,8 @@ class ActiveConfig
     elsif _config_file
       value = with_file(_config_file, method, *args)
       value
-    else 
+    else
       super
     end
   end
 end
-
