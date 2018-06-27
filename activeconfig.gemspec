@@ -14,7 +14,7 @@ Gem::Specification.new do |s|
   s.executables = ["active_config"]
   s.require_paths = ["lib"]
 
-  s.add_dependency("rdoc")
-  s.add_dependency("bundler")
-  s.add_dependency("fog")
+  s.add_development_dependency("rdoc")
+  s.add_development_dependency("bundler")
+  s.add_dependency("fog-aws")
 end

@@ -1,6 +1,6 @@
 require 'active_config'
 require 'test/unit'
-require 'fog'
+require 'fog-aws'
 
 # s3 mocks:
 # - connection is mocked
