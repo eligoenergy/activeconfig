@@ -72,11 +72,6 @@ class ActiveConfig
   # Valid keys are:
   #   :path           :  Where it can find the config files, defaults to ENV['ACTIVE_CONFIG_PATH'], or RAILS_ROOT/etc.  :path is either
   #   :file           :  Single file mode.  Only look for configuration in that one, presenting that file at top level
-  #   :s3 = {
-  #     :bucket
-  #     :aws_access_key_id
-  #     :aws_secret_access_key
-  #   }
   #   :root_file      :  Defines the file that holds "top level" configs. (ie active_config.key).  Defaults to "global" if global exists, nil otherwise.
   #   :suffixes       :  Either a suffixes object, or an array of suffixes symbols with their priority.  See the ActiveConfig::Suffixes object
   #   :config_refresh :  How often we should check for update config files
@@ -88,11 +83,10 @@ class ActiveConfig
 
     opts = Hash[:path, opts] if opts.is_a?(Array) || opts.is_a?(String)
 
-    @config_s3   = opts[:s3]
     @config_file = opts[:file]
 
-    # :path/:file/:s3 have higher priority then ENV variables
-    if opts.include?(:path) || opts.include?(:file) || opts.include?(:s3) then
+    # :path/:file have higher priority then ENV variables
+    if opts.include?(:path) || opts.include?(:file) then
       @config_path = opts[:path]
     else
       # default or infer :path through ENV or Rails obejct.
@@ -140,15 +134,6 @@ class ActiveConfig
     end
 
     _check_config!
-
-    if _config_s3
-      connection ||= Fog::Storage.new({
-        :provider                 => 'AWS',
-        :aws_access_key_id        => _config_s3[:aws_access_key_id],
-        :aws_secret_access_key    => _config_s3[:aws_secret_access_key]
-      })
-      @s3_bucket = connection.directories.find{ |x| x.key == _config_s3[:bucket]}
-    end
   end
 
   def _check_config!
@@ -162,10 +147,6 @@ class ActiveConfig
       raise Error.new "#{_config_file} not valid config file"
     end
 
-    if _config_s3 && (!_config_s3[:bucket] || !_config_s3[:aws_access_key_id] || !_config_s3[:aws_secret_access_key])
-      raise Error.new "Must configure s3 :bucket, :aws_access_key_id and :aws_secret_access_key"
-    end
-
     if _root_file
       raise "#{_root_file} root file not available"  unless
         _valid_file?(_root_file)
@@ -173,12 +154,12 @@ class ActiveConfig
         _config_path.empty?
     end
 
-    configured = [!_config_path.empty?, !!_config_file, !!_config_s3].select { |c| c }
+    configured = [!_config_path.empty?, !!_config_file].select { |c| c }
 
     if configured.length > 1
-      raise Error.new "Pick one of :path, :file or :s3"
+      raise Error.new "Pick one of :path or :file"
     elsif configured.length == 0
-      raise Error.new "Neither :path nor :file nor :s3 are configured.  Pick one"
+      raise Error.new "Neither :path nor :file are configured.  Pick one"
     end
 
   end
@@ -207,10 +188,6 @@ class ActiveConfig
 
   def _config_file
     @config_file
-  end
-
-  def _config_s3
-    @config_s3
   end
 
   # DON'T CALL THIS IN production.
@@ -270,18 +247,13 @@ class ActiveConfig
       mod_time=nil
 
       begin
-      if _config_s3
-        config_object = @s3_bucket.files.get(filename)
-        next unless config_object
-        next(@file_cache[filename]) unless (mod_time=config_object.last_modified) != @file_times[filename]
-        val = config_object.body
-      else
-        next unless File.exist?(filename)
-        next(@file_cache[filename]) unless (mod_time=File.stat(filename).mtime) != @file_times[filename]
-        File.open( filename ) { | yf |
-          val = yf.read
-        }
-      end
+
+      next unless File.exist?(filename)
+      next(@file_cache[filename]) unless (mod_time=File.stat(filename).mtime) != @file_times[filename]
+      File.open( filename ) { | yf |
+        val = yf.read
+      }
+
       # If file has a # ACTIVE_CONFIG:ERB comment,
       # Process it as an ERb first.
       if /^\s*#\s*ACTIVE_CONFIG\s*:\s*ERB/i.match(val)
@@ -321,11 +293,6 @@ class ActiveConfig
     return @cache_hash[name.to_sym] if @cache_hash[name.to_sym] and @reload_disabled
     # $stderr.puts "NOT USING CACHED AND RELOAD DISABLED" if @reload_disabled
     @cache_hash[name.to_sym]=begin
-      if _config_s3 and @s3_bucket.files.select { |f| _suffixes.for(name, ".yml").include?(f.key) }.empty?
-        # we don't know whether this file is on s3, reload the s3 file list
-        # to make sure it didn't appear since we last loaded the file list
-        @s3_bucket.files.reload
-      end
       x = _config_hash(name)
       @hash_times[name.to_sym]=now.to_i
       x
@@ -355,9 +322,7 @@ class ActiveConfig
 
     basename = File.basename(name.to_s, ext) || nil
     dirname  = File.dirname(name.to_s)
-    path_ary = if _config_s3
-      ['']  # no dirs on s3, just one place where objects are stored
-    elsif _config_path.empty?
+    path_ary = if _config_path.empty?
       [dirname]
     else
       _config_path
@@ -366,12 +331,8 @@ class ActiveConfig
     _suffixes.for(basename, ext).inject([]) do |all_files, name_x|
       # for :path style configs
       path_ary.reverse.inject(all_files) do |files, dir|
-        if _config_s3
-          files << name_x if @s3_bucket.files.select { |f| f.key == name_x }.first
-        else
-          fn = File.join(dir, name_x)
-          files << fn if File.exist? fn
-        end
+        fn = File.join(dir, name_x)
+        files << fn if File.exist? fn
         files
       end
     end
